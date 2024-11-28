@@ -1,101 +1,151 @@
 // script.js
 
-// DOM Elements
 const todoInput = document.getElementById('todo-input');
 const addBtn = document.getElementById('add-btn');
 const todoList = document.getElementById('todo-list');
-const container = document.querySelector('.container');
+const calendarModal = document.getElementById('calendar-modal');
+const deadlineInput = document.getElementById('deadline-input');
+const setDeadlineBtn = document.getElementById('set-deadline-btn');
+let currentTaskIndex = null; // 데드라인 설정 시 사용할 현재 작업 인덱스
 
-// 상태 변수
-let startY = 0;
-let isPulling = false;
+let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
 
-// localStorage에서 데이터 불러오기
-window.onload = function () {
-  const savedTodos = JSON.parse(localStorage.getItem('todos')) || []; // 저장된 데이터를 배열로 변환
-  savedTodos.forEach((todo) => {
-    createTodoItem(todo.text, todo.completed);
-  });
-};
+// 초기 렌더링
+renderTasks();
+updateCurrentTime();
 
-// 새로운 할 일 항목 생성
-function createTodoItem(text, completed = false) {
-  const li = document.createElement('li');
-  li.className = 'todo-item';
-  if (completed) li.classList.add('completed'); // 완료 상태 반영
-
-  const span = document.createElement('span');
-  span.textContent = text;
-  span.addEventListener('click', () => {
-    li.classList.toggle('completed'); // 완료 상태 토글
-    saveToLocalStorage(); // 상태 변경 후 저장
-  });
-
-  const deleteBtn = document.createElement('button');
-  deleteBtn.textContent = 'Delete';
-  deleteBtn.className = 'delete-btn';
-  deleteBtn.addEventListener('click', () => {
-    li.remove(); // 항목 삭제
-    saveToLocalStorage(); // 삭제 후 저장
-  });
-
-  li.appendChild(span);
-  li.appendChild(deleteBtn);
-  todoList.appendChild(li);
+// ** 현재 시간 업데이트 **
+function updateCurrentTime() {
+  setInterval(() => {
+    const now = new Date();
+    const currentTimeDiv = document.getElementById('current-time');
+    currentTimeDiv.textContent = `Current Time: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+  }, 1000);
 }
 
-// 할 일 추가 버튼 클릭 이벤트
+// ** 새 작업 추가 **
 addBtn.addEventListener('click', () => {
-  const todoText = todoInput.value.trim();
-  if (todoText !== '') {
-    createTodoItem(todoText);
-    saveToLocalStorage(); // 저장
-    todoInput.value = ''; // 입력 필드 초기화
-  }
+  const taskText = todoInput.value.trim();
+  if (!taskText) return;
+
+  addTask(taskText);
 });
 
-// localStorage에 할 일 저장
-function saveToLocalStorage() {
-  const todos = [];
-  document.querySelectorAll('.todo-item').forEach((item) => {
-    todos.push({
-      text: item.querySelector('span').textContent,
-      completed: item.classList.contains('completed'),
-    });
-  });
-  localStorage.setItem('todos', JSON.stringify(todos)); // JSON 형식으로 저장
+// 작업 추가 함수
+function addTask(text) {
+  const task = { text, subTasks: [], completed: false, deadline: null };
+  tasks.push(task);
+  renderTasks();
+  saveToLocalStorage();
+  todoInput.value = ''; // 입력 필드 초기화
 }
 
-// 터치 시작 시 초기 지점 저장
-container.addEventListener('touchstart', (e) => {
-  if (container.scrollTop === 0) { // 스크롤이 최상단일 때만 동작
-    startY = e.touches[0].pageY; // 터치 시작 위치 저장
-    isPulling = true; // 당기기 상태 활성화
-  }
-});
+// 작업 렌더링
+function renderTasks() {
+  todoList.innerHTML = ''; // 초기화
+  tasks.forEach((task, index) => {
+    const li = document.createElement('li');
+    li.className = `todo-item ${task.completed ? 'completed' : ''}`;
 
-// 터치 이동 시 당기는 애니메이션 실행
-container.addEventListener('touchmove', (e) => {
-  if (isPulling) {
-    const currentY = e.touches[0].pageY; // 현재 터치 위치
-    const diff = currentY - startY; // 터치 이동 거리 계산
+    const header = document.createElement('div');
+    header.className = 'todo-header';
 
-    if (diff > 0) { // 아래로 당길 때만 동작
-      container.style.transform = `translateY(${Math.min(diff, 50)}px)`; // 최대 50px까지 당김
+    header.innerHTML = `
+      <span>${task.text}</span>
+      <div class="actions">
+        <button onclick="markAsDone(${index})" class="done-btn" ${task.completed ? 'disabled' : ''}>Done</button>
+        <button onclick="editTask(${index})" ${task.completed ? 'disabled' : ''}>Edit</button>
+        <button onclick="deleteTask(${index})" class="delete-btn">Delete</button>
+        <button onclick="addSubTask(${index})" ${task.completed ? 'disabled' : ''}>Sub-task</button>
+        <button onclick="openDeadlineModal(${index})" ${task.completed ? 'disabled' : ''}>Set Deadline</button>
+      </div>
+    `;
+
+    li.appendChild(header);
+
+    if (task.deadline) {
+      const deadlineDiv = document.createElement('div');
+      deadlineDiv.className = 'deadline';
+      deadlineDiv.textContent = `Deadline: ${new Date(task.deadline).toLocaleString()}`;
+      li.appendChild(deadlineDiv);
     }
+
+    if (task.subTasks.length > 0) {
+      const subTaskList = document.createElement('div');
+      subTaskList.className = 'sub-task-list';
+      task.subTasks.forEach((subTask, subIndex) => {
+        const subTaskDiv = document.createElement('div');
+        subTaskDiv.className = `sub-task ${subTask.completed ? 'completed' : ''}`;
+        subTaskDiv.innerHTML = `
+          <span>${subTask.text}</span>
+          <div class="actions">
+            <button onclick="markAsDone(${index}, ${subIndex})" class="done-btn" ${subTask.completed ? 'disabled' : ''}>Done</button>
+            <button onclick="editTask(${index}, ${subIndex})" ${subTask.completed ? 'disabled' : ''}>Edit</button>
+            <button onclick="deleteTask(${index}, ${subIndex})" class="delete-btn">Delete</button>
+          </div>
+        `;
+        subTaskList.appendChild(subTaskDiv);
+      });
+      li.appendChild(subTaskList);
+    }
+
+    todoList.appendChild(li);
+  });
+}
+
+// ** 작업 완료 (Done 클릭 시 처리) **
+function markAsDone(index, subIndex = null) {
+  if (subIndex === null) {
+    tasks[index].completed = true;
+  } else {
+    tasks[index].subTasks[subIndex].completed = true;
+  }
+  renderTasks();
+  saveToLocalStorage();
+}
+
+// ** 작업 삭제 **
+function deleteTask(index, subIndex = null) {
+  if (subIndex === null) {
+    tasks.splice(index, 1);
+  } else {
+    tasks[index].subTasks.splice(subIndex, 1);
+  }
+  renderTasks();
+  saveToLocalStorage();
+}
+
+// ** 세부 작업 추가 **
+function addSubTask(index) {
+  const subTaskText = prompt('Enter sub-task:');
+  if (subTaskText) {
+    const subTask = { text: subTaskText, completed: false };
+    tasks[index].subTasks.push(subTask);
+    renderTasks();
+    saveToLocalStorage();
+  }
+}
+
+// ** 데드라인 설정 모달 열기 **
+function openDeadlineModal(index) {
+  currentTaskIndex = index;
+  calendarModal.classList.remove('hidden');
+}
+
+// ** 데드라인 설정 완료 **
+setDeadlineBtn.addEventListener('click', () => {
+  if (currentTaskIndex === null) return;
+  const deadline = deadlineInput.value;
+  if (deadline) {
+    tasks[currentTaskIndex].deadline = new Date(deadline).toISOString();
+    currentTaskIndex = null;
+    calendarModal.classList.add('hidden');
+    renderTasks();
+    saveToLocalStorage();
   }
 });
 
-// 터치 종료 시 원래 상태로 복구
-container.addEventListener('touchend', () => {
-  if (isPulling) {
-    isPulling = false; // 당기기 상태 비활성화
-    container.style.transition = 'transform 0.2s ease-out'; // 복귀 애니메이션
-    container.style.transform = 'translateY(0)'; // 원래 위치로 이동
-
-    // 복귀 후 다음 동작을 위해 초기화
-    setTimeout(() => {
-      container.style.transition = ''; // 초기화하여 다음 애니메이션 준비
-    }, 200);
-  }
-});
+// ** 로컬 저장소 저장 **
+function saveToLocalStorage() {
+  localStorage.setItem('tasks', JSON.stringify(tasks));
+}

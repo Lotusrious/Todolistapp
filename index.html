@@ -3,17 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pull Animation To-Do List</title>
+  <title>Todolist</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
-    <h1>My To-Do List</h1>
+    <h1>Todolist</h1>
     <div class="input-container">
-      <input type="text" id="todo-input" placeholder="Enter your task here">
+      <input type="text" id="todo-input" placeholder="Enter your task">
       <button id="add-btn">Add</button>
     </div>
     <ul id="todo-list"></ul>
+    <!-- 현재 시간 표시 -->
+    <div id="current-time"></div>
+
+    <!-- Modal for setting deadline -->
+    <div id="calendar-modal" class="modal hidden">
+      <h3>Select Deadline</h3>
+      <input type="datetime-local" id="deadline-input">
+      <button id="set-deadline-btn">Set Deadline</button>
+    </div>
   </div>
   <script src="script.js"></script>
 </body>
